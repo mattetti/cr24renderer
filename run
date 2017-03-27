@@ -1,0 +1,1 @@
+docker run -p 9223:9223 -d cr24-proxyrenderer
