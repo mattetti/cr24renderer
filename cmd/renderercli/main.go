@@ -17,7 +17,10 @@ import (
 	"github.com/raff/godet"
 )
 
-var flagURL = flag.String("url", "https://splice.com", "url to render")
+var (
+	flagURL  = flag.String("url", "https://splice.com", "url to render")
+	flagPort = flag.Int("port", 9223, "the chrome debugging port")
+)
 
 type HTMLFilter func(htmlStr string) string
 
@@ -43,8 +46,11 @@ func NewScriptRemover(blackList []string) HTMLFilter {
 func main() {
 	flag.Parse()
 	// connect to Chrome instance
-	remote, err := godet.Connect("localhost:9223", false)
-
+	remote, err := godet.Connect(fmt.Sprintf("localhost:%d", *flagPort), false)
+	if err != nil {
+		fmt.Println("can't connect to Chrome on port %d - %v", *flagPort, err)
+		os.Exit(1)
+	}
 	// disconnect when done
 	defer remote.Close()
 	wg := sync.WaitGroup{}
@@ -55,6 +61,11 @@ func main() {
 
 	// get list of open tabs
 	tabs, err := remote.TabList("")
+	if err != nil || len(tabs) < 1 {
+		fmt.Println("unexpected lack of tabs", err)
+		os.Exit(1)
+	}
+	fmt.Println("Tabs:")
 	for i, tab := range tabs {
 		fmt.Printf("tab %d -> %#v\n", i, tab)
 	}
@@ -88,19 +99,21 @@ func main() {
 		isReadyResp, err := remote.EvaluateWrap("return window.prerenderReady")
 		if err != nil {
 			fmt.Println("couldn't get the prerender status")
-			return
+		} else {
+			isReady, _ := isReadyResp.(bool)
+			fmt.Println("prerender ready?", isReady)
 		}
-		isReady, _ := isReadyResp.(bool)
-		fmt.Println("prerender ready?", isReady)
-		res, err := remote.Evaluate(`document.readyState`)
+		res, _ := remote.Evaluate(`document.readyState`)
 		fmt.Println("document.readyState", res)
 		res, err = remote.Evaluate(`document.documentElement.innerHTML`)
 		if err != nil {
-			panic(err)
+			fmt.Println("expected access to the full doc, got an err", err)
+			return
 		}
 		htmlRes := res.(string)
 		// remove script tags
 		out := filter(htmlRes)
+
 		filename := "output.html"
 		pURL, err := url.Parse(*flagURL)
 		if err == nil {
@@ -109,6 +122,7 @@ func main() {
 		}
 		f, err := os.Create(filename)
 		if err != nil {
+			fmt.Println("can't create an output file")
 			panic(err)
 		}
 		f.WriteString(out)
