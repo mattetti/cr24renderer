@@ -21,6 +21,7 @@ var flagURL = flag.String("url", "https://splice.com", "url to render")
 
 type HTMLFilter func(htmlStr string) string
 
+// NewScriptRemover returns a HTML filter function
 func NewScriptRemover(blackList []string) HTMLFilter {
 	return func(htmlStr string) string {
 		if htmlStr == "" {
@@ -145,6 +146,7 @@ type htmlParser struct {
 	// Doc is the root node
 	Doc *html.Node
 	// BlackListedDomains are the domains for filtering reasons
+	// not used at the moment.
 	BlackListedDomains []string
 	// TODO: add a logger
 }
